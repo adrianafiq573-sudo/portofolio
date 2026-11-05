@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Station Portfolio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+<style>
+/* ============ STYLE LAYER (paper/pencil look) ============
+   Upgrade path: tweak tokens below, or replace .grain with a real paper texture. */
+:root{--paper:#f1ece0;--ink:#2b2b2b;--accent:#c0392b;--pastel:#d9d2bf;--ui-bg:#faf6ea;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--outer:#1b1a17}}
+html,body{height:100%;margin:0}
+body{background:var(--outer,#e4dfd0);display:flex;align-items:center;justify-content:center;
+  font-family:'Patrick Hand','Comic Sans MS',cursive,sans-serif;color:var(--ink)}
+#game{position:relative;width:min(100vw,calc((100vh - 40px)*16/9),1000px);aspect-ratio:16/9;
+  border:3px solid var(--ink);background:var(--paper);overflow:hidden;font-size:clamp(12px,2.2vw,22px)}
+canvas{width:100%;height:100%;image-rendering:pixelated;display:block}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.22;mix-blend-mode:multiply;
+  background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/><feColorMatrix values='0 0 0 0 .3 0 0 0 0 .28 0 0 0 0 .25 0 0 0 .9 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>")}
+.box{background:var(--ui-bg);border:3px solid var(--ink);border-radius:6px 10px 5px 9px;box-shadow:3px 3px 0 var(--ink)}
+button{font:inherit;color:var(--ink);background:var(--ui-bg);border:2px solid var(--ink);border-radius:5px 8px 4px 7px;padding:.2em .7em;cursor:pointer}
+button:hover,button:focus-visible{background:var(--ink);color:var(--ui-bg);outline:none}
+a.btn{display:inline-block;text-decoration:none;font:inherit;color:var(--ink);border:2px solid var(--ink);border-radius:5px 8px 4px 7px;padding:.2em .7em;background:var(--ui-bg)}
+a.btn:hover,a.btn:focus-visible{background:var(--ink);color:var(--ui-bg);outline:none}
+/* dialogue */
+#dlg{position:absolute;left:4%;right:4%;bottom:4%;padding:.6em .9em;display:none}
+#dlg .row{margin-top:.5em;display:flex;gap:.5em;flex-wrap:wrap}
+/* panel (board / ticket machine) */
+#panel{position:absolute;inset:6% 8%;display:none;flex-direction:column;padding:.6em .9em}
+#panel header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px dashed var(--ink);padding-bottom:.3em}
+#panel h2{margin:0;font-weight:400;font-size:1.3em}
+#pbody{overflow:auto;flex:1;padding-top:.5em;line-height:1.35}
+.tabs{display:flex;gap:.4em;flex-wrap:wrap;margin-bottom:.5em}
+.tabs button[aria-selected=true]{background:var(--ink);color:var(--ui-bg)}
+.tix{display:grid;grid-template-columns:repeat(auto-fit,minmax(9em,1fr));gap:.6em}
+.tix button{text-align:left;padding:.5em;border-style:dashed}
+.tix small{display:block;opacity:.7}
+/* hint + controls */
+#hint{position:absolute;top:3%;left:3%;font-size:.85em;opacity:.75;transition:opacity 2s}
+#skip{position:absolute;top:3%;right:3%;font-size:.8em}
+#snd{position:absolute;top:3%;right:20%;font-size:.8em}
+/* opening screen */
+#title{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(241,236,224,.6);z-index:3}
+#title .box{padding:1em 1.8em;text-align:center}
+#title h1{margin:0 0 .15em;font-weight:400;font-size:2.2em}
+#title p{margin:0}
+#title .row{display:flex;gap:.6em;justify-content:center;margin:.9em 0 .6em}
+#title small{opacity:.7}
+#touch{position:absolute;left:3%;right:3%;bottom:3%;display:none;justify-content:space-between;pointer-events:none}
+#touch *{pointer-events:auto;touch-action:manipulation}
+#dpad{display:grid;grid-template-columns:repeat(3,2.2em);grid-template-rows:repeat(3,2.2em);gap:2px}
+#act{width:3em;height:3em;border-radius:50%;align-self:end;background:var(--accent);color:#fff;border-color:var(--ink)}
+@media (pointer:coarse){#touch{display:flex}}
+#plain{position:fixed;inset:0;background:var(--paper);overflow:auto;padding:5vw;display:none;z-index:5;font-size:18px;line-height:1.5}
+#plain section{max-width:60ch;margin:0 auto 1.5em}
+#plain h1,#plain h2{font-weight:400}
+@media (prefers-reduced-motion:reduce){#hint{transition:none}}
+</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="cv" width="320" height="180" aria-label="Metro station game"></canvas>
+  <div class="grain"></div>
+  <div id="hint">Move: arrow keys / WASD &nbsp; Interact: E or Space</div>
+  <button id="skip">Plain version</button>
+  <button id="snd">Sound: on</button><input type="file" id="mp3" accept="audio/*" hidden>
+  <div id="dlg" class="box" role="dialog" aria-live="polite"><div id="dtxt"></div><div class="row" id="dbtn"></div></div>
+  <div id="panel" class="box" role="dialog"><header><h2 id="ptitle"></h2><button id="pclose">Close (Esc)</button></header><div id="pbody"></div></div>
+  <div id="touch"><div id="dpad"></div><button id="act" aria-label="Interact">E</button></div>
+  <div id="title"><div class="box"><h1 id="ttl"></h1><p id="sub"></p><div class="row"><button id="start">Start game</button><button id="pl2">Plain version</button></div><small>Move with arrow keys or WASD. Interact with E or Space.</small></div></div>
+</div>
+<div id="plain"></div>
+
+<script>
+/* =====================================================================
+   METRO STATION PORTFOLIO — ARCHITECTURE & UPGRADE GUIDE
+   ---------------------------------------------------------------------
+   1. CONFIG   : all content (links, resume, board text). Edit only this
+                 section to update your portfolio. No code changes needed.
+   2. WORLD    : room geometry + INTERACTABLES list. To add an object, add
+                 one entry (position, prompt, onUse) and one draw function.
+   3. ART      : draw*() functions paint procedural pixel art on a 320x180
+                 canvas. UPGRADE: replace each with ctx.drawImage() from a
+                 sprite sheet (hand-drawn Omori-style art). Keep the same
+                 x/y/w/h so logic is untouched.
+   4. STYLE    : CSS .grain overlay + wobble() jitter on outlines. Change or
+                 remove independently of game logic.
+   5. UI/FLOW  : say() dialogue, openPanel() overlays, ticket/gate logic.
+   ---------------------------------------------------------------------
+   NPCs: add an INTERACTABLES entry + SOLIDS entry + a draw fn (see GUARD).
+   Cutscenes: state.scene ('walk'|'train') blocks input; finish with endScene().
+   Audio: section 6. Everything is synthesized (lo-fi loop + sound effects), so nothing needs
+   licensing. Visitors can load their own MP3 by asking the guard (musicMenu). sfx(name) is the hook.
+   Opening screen: the #title overlay. state.mode starts as 'title'; Start sets 'play'.
+   Station decor: drawWall() (tiles, stripe, signs, clock, vending) and the floor loop in drawRoom().
+   Guiding blocks: drawTactile() paints yellow tenji paving (bars = walk straight,
+   dots = decision point) from the board to the machine and the gate. Edit its loops
+   to reroute. Hall NPCs: edit the QUEUE list. Train NPCs: seated() calls in drawTrain().
+   Planned next: map + navigation trail + quick travel (see design notes),
+   walkable corridor, sound. Hooks: INTERACTABLES, bounds(), state.
+   ===================================================================== */
+
+/* ---------- 1. CONFIG (edit me) ---------- */
+const CONFIG = {
+  name: "Your Name",
+  station: "Portfolio",       // station name shown on the opening screen and wall sign
+  welcome: "Welcome. Check the board, then get a ticket.",
+  resumeUrl: "#",            // path/URL to your resume PDF
+  board: [                   // announcement board tabs (html allowed)
+    {title:"About", body:"<p>Hi, I'm <b>Your Name</b>, a developer who builds things for the web. Replace this with a short bio.</p><p>Currently working on: your current project.</p>"},
+    {title:"Experience", body:"<p><b>Now boarding:</b> Software Developer, Company A, 2022 to present.</p><p><b>Previously:</b> Junior Developer, Company B, 2020 to 2022.</p>"},
+    {title:"Projects", body:"<p><b>Project One:</b> one-line description. Stack: HTML, JS.</p><p><b>Project Two:</b> one-line description. Stack: React, Node.</p>"},
+    {title:"Skills", body:"<p><b>Frontend:</b> HTML, CSS, JavaScript<br><b>Backend:</b> Node, SQL<br><b>Tools:</b> Git, Figma</p>"},
+    {title:"Resume", body:"<p>The full resume is one click away.</p>", resume:true}
+  ],
+  tickets: [                 // ticket machine entries (every link goes through the gate)
+    {id:"linkedin", label:"LinkedIn", dest:"LinkedIn profile", url:"https://www.linkedin.com/in/your-name"},
+    {id:"github",   label:"GitHub",   dest:"GitHub profile",   url:"https://github.com/your-name"},
+    {id:"email",    label:"Email",    dest:"your email",       url:"mailto:you@example.com"},
+    {id:"resume",   label:"Resume PDF", dest:"resume file",    url:"#"}
+  ]
+};
+
+/* ---------- state ---------- */
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id);
+const state={x:160,y:84,dir:'down',ticket:null,mode:'title',auto:null,gateOpen:false,t:0};
+const keys={};
+const PAL={ink:'#2b2b2b',wall:'#d9d2bf',floor:'#e9e3d3',tile:'#ddd6c3',dark:'#7d7a74',acc:'#c0392b',paper:'#faf6ea',skin:'#f0c9a0'};
+
+/* ---------- 2. WORLD ---------- */
+const BOARD={x:105,y:10,w:110,h:42}, MACHINE={x:18,y:76,w:30,h:40}, GATE={x:240,y:76,w:12,h:68};
+const GUARD={x:218,y:70,w:12,h:12};   // security NPC beside the gate
+const SOLIDS=[MACHINE,GATE,GUARD];
+const INTERACTABLES=[
+  {id:'board',  rect:BOARD,   reach:34, prompt:'Read the board',   onUse:()=>openBoard()},
+  {id:'machine',rect:MACHINE, reach:16, prompt:'Buy a ticket',     onUse:()=>openMachine()},
+  {id:'gate',   rect:GATE,    reach:16, prompt:'Use the gate',     onUse:()=>useGate()},
+  {id:'guard',  rect:GUARD,   reach:14, prompt:'Talk to the guard', onUse:()=>talkGuard()}
+];
+/* queue of NPCs waiting at the ticket machine: add/remove entries freely */
+const QUEUE=[
+  {x:33,y:134,body:'#b5655a',hair:'#5a3a2a',lines:["I can't decide between LinkedIn and GitHub.","Take your time. I'm not in a hurry."]},
+  {x:33,y:150,body:'#6a8f5a',hair:'#d8b04a',lines:["This line moves faster than it looks.","The board by the entrance has the details."]},
+  {x:33,y:166,body:'#7a6aa5',hair:'#2a2a2a',lines:["Are you the one on the board?","Nice station, isn't it?"]},
+  {x:232,y:130,body:'#c58a4a',hair:'#3a2a1a',lines:["Ticket's ready. Just waiting for my turn at the gate.","The guard checks everyone. Even regulars."]},
+  {x:232,y:146,body:'#4f8fa0',hair:'#8a3a2a',lines:["Almost there. Next stop, somewhere good.","Don't cut in line. I'm watching you."]},
+  {x:232,y:162,body:'#a05a7a',hair:'#2a2a2a',lines:["Have you bought a ticket yet?","The machine is on the far left."]}
+];
+QUEUE.forEach((q,i)=>{let n=0;const r={x:q.x-4,y:q.y-14,w:8,h:14};SOLIDS.push(r);
+  INTERACTABLES.push({id:'npc'+i,rect:r,reach:14,prompt:'Chat',onUse:()=>say(q.lines[n++%q.lines.length])});});
+function person(x,y,body,hair){ // generic standing NPC (front view)
+  const b=Math.floor(state.t*2+x)%2;
+  ctx.fillStyle='rgba(0,0,0,.15)';ctx.fillRect(x-5,y-1,10,3);
+  box(x-4,y-9,8,8,body);box(x-4,y-17-b,8,8,PAL.skin);
+  ctx.fillStyle=hair;ctx.fillRect(x-4,y-18-b,8,3);ctx.fillStyle=PAL.ink;ctx.fillRect(x-2,y-13-b,1,2);ctx.fillRect(x+1,y-13-b,1,2);
+}
+function drawQueue(){QUEUE.forEach(q=>person(q.x,q.y,q.body,q.hair));}
+function seated(x,yb,sh,body,hair,mode){ // seated passenger, front view (mode: player|read|sleep)
+  const t=state.sceneT,hy=yb-30+sh+(mode==='sleep'?2:0);
+  box(x-9,yb-17+sh,18,17,body);box(x-8,yb,6,12,'#3d3d3d');box(x+2,yb,6,12,'#3d3d3d');
+  box(x-7,hy,14,13,PAL.skin);ctx.fillStyle=hair;ctx.fillRect(x-7,hy,14,5);ctx.fillStyle=PAL.ink;
+  if(mode==='sleep'){ctx.fillRect(x-4,hy+7,3,1);ctx.fillRect(x+1,hy+7,3,1);ctx.font='7px monospace';ctx.textAlign='left';ctx.fillText('z',x+9,hy-Math.floor(t*2)%3);}
+  else if(mode==='read'){ctx.fillRect(x-4,hy+7,2,1);ctx.fillRect(x+2,hy+7,2,1);box(x-9,yb-16+sh,18,12,PAL.paper);ctx.fillStyle=PAL.ink;ctx.fillRect(x-6,yb-12+sh,12,1);ctx.fillRect(x-6,yb-9+sh,9,1);}
+  else{const bl=(t%3)>2.85?1:3;ctx.fillRect(x-4,hy+6,2,bl);ctx.fillRect(x+2,hy+6,2,bl);ctx.fillRect(x-2,hy+10,4,1);
+    if(state.ticket){ctx.fillStyle=PAL.acc;ctx.fillRect(x+9,yb-8+sh,4,6);}}
+}
+function drawTactile(){ // yellow guiding blocks (tenji): bars = go straight, dots = stop / decision point
+  const S=8,Y='#e8c547',D='#b8962a';
+  const tile=(x,y,dots,vert)=>{ctx.fillStyle=Y;ctx.fillRect(x,y,S,S);ctx.fillStyle=D;
+    if(dots){for(let i=0;i<3;i++)for(let j=0;j<3;j++)ctx.fillRect(x+1+i*3,y+1+j*3,2,2);}
+    else if(vert){for(let i=0;i<3;i++)ctx.fillRect(x+1+i*3,y,2,S);}
+    else{for(let i=0;i<3;i++)ctx.fillRect(x,y+1+i*3,S,2);}
+    ctx.strokeStyle=D;ctx.strokeRect(x+.5,y+.5,S-1,S-1);};
+  for(let y=62;y<100;y+=S)tile(160,y,false,true);                                  // board -> junction
+  for(let x=56;x<=232;x+=S)tile(x,100,x===56||x===160||x===232,false);              // machine <- junction -> gate
+}
+function bounds(nx,ny){ // hall floor only; corridor is scenery behind the gate
+  if(state.auto) return true;
+  if(nx<8||nx>236||ny<60||ny>172) return false;
+  return !SOLIDS.some(r=>nx+4>r.x&&nx-4<r.x+r.w&&ny+2>r.y&&ny-3<r.y+r.h-14+14&&ny>r.y+6-2&&ny-3<r.y+r.h);
+}
+
+/* ---------- 4. STYLE helpers ---------- */
+function wob(seed){ // stepped jitter ~6fps -> "boiling line" feel
+  const f=Math.floor(state.t*6);return Math.sin(seed*12.9898+f*78.233)*.45;
+}
+function box(x,y,w,h,fill){ // filled rect with wobbly pencil outline
+  ctx.fillStyle=fill;ctx.fillRect(x,y,w,h);ctx.strokeStyle=PAL.ink;ctx.lineWidth=1;
+  ctx.strokeRect(x+.5+wob(x),y+.5+wob(y+1),w+wob(w),h+wob(h+2));
+}
+
+/* ---------- 3. ART (procedural placeholders; swap for sprites) ---------- */
+function drawWall(){ // Tokyo-style wall: pale glazed tiles, line-colour stripe, ceiling lights, signage
+  ctx.fillStyle='#e4ece6';ctx.fillRect(0,0,320,58);
+  ctx.fillStyle='#d3dfd6';for(let x=0;x<320;x+=12)ctx.fillRect(x,8,1,50);for(let y=8;y<58;y+=10)ctx.fillRect(0,y,320,1);
+  ctx.fillStyle='#4f545b';ctx.fillRect(0,0,320,8);
+  ctx.fillStyle='#fff8d8';for(let x=14;x<320;x+=48)ctx.fillRect(x,2,22,3);          // fluorescent strips
+  ctx.fillStyle='#3a9a5a';ctx.fillRect(0,46,320,4);                                  // line-colour stripe
+  ctx.fillStyle='#6f747a';ctx.fillRect(0,54,320,4);                                  // skirting
+  box(96,0,6,58,'#c3cfc6');box(220,0,6,58,'#c3cfc6');                                // pilasters
+  [[8,'#c0392b'],[30,'#2a6fb0']].forEach(([x,c])=>{                                  // vending machines
+    box(x,20,18,34,c);box(x+2,23,14,14,'#f3f6e8');ctx.fillStyle=PAL.ink;
+    for(let i=0;i<3;i++)ctx.fillRect(x+4+i*4,26,2,6);box(x+4,44,10,4,'#222');});
+  box(50,12,44,22,'#fff');ctx.fillStyle='#3a9a5a';ctx.beginPath();ctx.arc(59,23,5,0,7);ctx.fill();   // station name plate
+  ctx.fillStyle='#fff';ctx.font='5px monospace';ctx.textAlign='center';ctx.fillText('P01',59,25);
+  ctx.fillStyle=PAL.ink;ctx.fillText(CONFIG.station.toUpperCase(),79,21);ctx.font='4px monospace';ctx.fillText('STATION',79,28);
+  box(228,10,20,12,'#161616');ctx.fillStyle='#ff9a2a';ctx.font='5px monospace';ctx.textAlign='left';   // LED sign
+  ctx.fillText(Math.floor(state.t/2)%2?'GATE >':'EXIT >',231,18);
+  const d=new Date(),cx=238,cy=36,hr=(d.getHours()%12+d.getMinutes()/60)/12*6.283,mn=d.getMinutes()/60*6.283;
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx,cy,7,0,7);ctx.fill();ctx.strokeStyle=PAL.ink;ctx.stroke();    // live clock
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.sin(hr)*4,cy-Math.cos(hr)*4);ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.sin(mn)*6,cy-Math.cos(mn)*6);ctx.stroke();
+}
+function drawRoom(){
+  ctx.fillStyle='#8d8a83';ctx.fillRect(0,0,320,180);
+  drawWall();
+  ctx.strokeStyle=PAL.ink;ctx.beginPath();ctx.moveTo(0,58.5);ctx.lineTo(320,58.5);ctx.stroke();
+  for(let x=0;x<252;x+=24)for(let y=62;y<180;y+=24){ctx.fillStyle=((x+y)/24)%2?'#96938b':'#8d8a83';ctx.fillRect(x,y,24,24);ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(x+3,y+4,1,1);ctx.fillRect(x+14,y+15,1,1);}
+  drawTactile();
+  // corridor (scenery behind gate)
+  ctx.fillStyle=PAL.dark;ctx.fillRect(252,40,68,120);
+  ctx.fillStyle='#cdd8cf';ctx.fillRect(252,40,68,18);
+  box(262,50,22,26,PAL.paper);box(290,56,18,22,PAL.paper);           // posters
+  ctx.fillStyle=PAL.ink;ctx.fillRect(266,56,14,2);ctx.fillRect(266,61,10,2);ctx.fillRect(294,62,10,2);
+  box(270,128,36,8,'#8a8470');                                         // bench
+  const flick=Math.sin(state.t*9)>.92?.5:1;ctx.globalAlpha=flick;box(280,42,20,3,'#fff6c8');ctx.globalAlpha=1;
+}
+function drawBoard(){
+  box(BOARD.x,BOARD.y,BOARD.w,BOARD.h,'#3b3b36');
+  ctx.fillStyle=PAL.paper;ctx.font='8px monospace';ctx.textAlign='center';
+  ctx.fillText('ANNOUNCEMENTS',BOARD.x+55,BOARD.y+13);
+  ctx.fillStyle=PAL.acc;ctx.fillRect(BOARD.x+10,BOARD.y+19,90,1);
+  ctx.fillStyle=PAL.paper;ctx.fillRect(BOARD.x+10,BOARD.y+25,70,2);ctx.fillRect(BOARD.x+10,BOARD.y+31,50,2);
+}
+function drawMachine(){
+  box(MACHINE.x,MACHINE.y,MACHINE.w,MACHINE.h,'#6f8a8f');
+  box(MACHINE.x+4,MACHINE.y+4,22,14,'#e8f0d8');
+  ctx.fillStyle=PAL.ink;ctx.fillRect(MACHINE.x+7,MACHINE.y+8,16,1);ctx.fillRect(MACHINE.x+7,MACHINE.y+12,10,1);
+  box(MACHINE.x+8,MACHINE.y+24,14,3,PAL.paper);
+  if(state.ticket){ctx.fillStyle=PAL.acc;ctx.fillRect(MACHINE.x+10,MACHINE.y+27,10,5);}
+}
+function drawGate(){
+  box(GATE.x,GATE.y,GATE.w,10,'#6f8a8f');box(GATE.x,GATE.y+GATE.h-10,GATE.w,10,'#6f8a8f');
+  const mid=GATE.y+10,len=GATE.h-20;
+  ctx.fillStyle=state.gateOpen?'#8bb87a':PAL.acc;
+  if(state.gateOpen){ctx.fillRect(GATE.x+3,mid,2,5);ctx.fillRect(GATE.x+3,GATE.y+GATE.h-15,2,5);}
+  else{ctx.fillRect(GATE.x+3,mid,3,len);ctx.strokeStyle=PAL.ink;ctx.strokeRect(GATE.x+3.5,mid+.5,3,len);}
+}
+function drawPlayer(){
+  const moving=state.moving,b=moving?Math.floor(state.t*8)%2:0,x=Math.round(state.x),y=Math.round(state.y);
+  ctx.fillStyle='rgba(0,0,0,.15)';ctx.fillRect(x-5,y-1,10,3);
+  box(x-4,y-9-b,8,8,'#4a6fa5');                       // body
+  box(x-4,y-17-b,8,8,PAL.skin);                       // head
+  ctx.fillStyle=PAL.ink;ctx.fillRect(x-4,y-18-b,8,3);  // hair
+  if(state.dir!=='up'){ctx.fillRect(x-2+(state.dir==='right'?1:state.dir==='left'?-1:0),y-12-b,1,2);ctx.fillRect(x+1+(state.dir==='right'?1:state.dir==='left'?-1:0),y-12-b,1,2);}
+  if(state.ticket){ctx.fillStyle=PAL.acc;ctx.fillRect(x+4,y-8-b,3,4);}  // ticket in hand
+}
+function drawGuard(){
+  const x=224,y=82,b=Math.floor(state.t*2)%2;
+  ctx.fillStyle='rgba(0,0,0,.15)';ctx.fillRect(x-5,y-1,10,3);
+  box(x-4,y-9,8,8,'#34455e');box(x-4,y-17-b,8,8,PAL.skin);
+  box(x-5,y-20-b,10,4,'#34455e');ctx.fillStyle=PAL.ink;ctx.fillRect(x-2,y-13-b,1,2);ctx.fillRect(x+1,y-13-b,1,2);
+  ctx.fillStyle=PAL.acc;ctx.fillRect(x+1,y-8,2,2);
+}
+function drawTrain(){
+  const t=state.sceneT,sh=Math.round(Math.sin(t*16)*.6);
+  ctx.fillStyle='#e8e4d8';ctx.fillRect(0,0,320,180);ctx.fillStyle='#7d7a74';ctx.fillRect(0,128,320,52);
+  ctx.fillStyle='#f4f1e6';ctx.fillRect(0,0,320,18);ctx.fillStyle='#fff8d8';for(let x=10;x<320;x+=60)ctx.fillRect(x,6,40,3);   // ceiling + lights
+  ctx.fillStyle='#8a8f86';ctx.fillRect(0,17,320,2);                                                                      // overhead rail
+  box(110,3,100,11,'#2a2d33');ctx.fillStyle='#8a8f86';ctx.fillRect(114,8,92,2);                                          // route strip, next stop blinks
+  for(let i=0;i<6;i++){ctx.fillStyle=i===Math.floor(t*1.5)%6?'#ff9a2a':'#f4f1e6';ctx.fillRect(116+i*17,6,5,6);}
+  box(4,24,48,104,'#cfd4cc');box(9,30,17,50,'#bcd2e0');box(30,30,17,50,'#bcd2e0');                                     // door
+  box(278,34,38,40,'#f6f0e0');ctx.fillStyle='#3a9a5a';ctx.fillRect(284,52,26,2);ctx.fillRect(284,52,2,12);ctx.fillRect(284,64,26,2);
+  ctx.fillStyle=PAL.acc;[284,297,310].forEach(x=>ctx.fillRect(x-1,50,4,4));                                              // route map poster
+  box(56,20,208,92,PAL.paper);
+  ctx.save();ctx.beginPath();ctx.rect(60,24,200,84);ctx.clip();ctx.translate(0,sh);
+  const sky=ctx.createLinearGradient(0,20,0,100);sky.addColorStop(0,'#9fc5e8');sky.addColorStop(1,'#f7d9a8');ctx.fillStyle=sky;ctx.fillRect(60,20,200,92);
+  const bld=(x,top,w,c)=>{ctx.fillStyle=c;ctx.fillRect(x,top,w,112-top);ctx.fillStyle='#ffe7a0';   // building with lit windows
+    for(let yy=top+4;yy<96;yy+=7)for(let xx=x+3;xx<x+w-3;xx+=6)if((xx*7+yy*3)%5<2)ctx.fillRect(xx,yy,3,3);};
+  ctx.fillStyle='#fbe3a0';ctx.beginPath();ctx.arc(215,72,12,0,7);ctx.fill();
+  const lay=(sp,w,fn)=>{for(let x=60-((t*sp)%w);x<260;x+=w)fn(x,w);};
+  lay(8,110,x=>{ctx.fillStyle='#fff';ctx.fillRect(x+20,40,40,6);ctx.fillRect(x+30,36,20,4);});
+  lay(5,260,x=>{ctx.fillStyle='#d9534f';ctx.beginPath();ctx.moveTo(x+120,36);ctx.lineTo(x+112,100);ctx.lineTo(x+128,100);ctx.closePath();ctx.fill();ctx.fillStyle='#fff';ctx.fillRect(x+117,66,6,2);});   // distant tower
+  lay(14,120,x=>{ctx.fillStyle='#b7c4d4';ctx.fillRect(x,64,22,48);ctx.fillRect(x+26,52,18,60);ctx.fillRect(x+48,70,24,42);ctx.fillRect(x+76,58,16,54);ctx.fillRect(x+96,74,22,38);});   // far skyline
+  lay(36,110,x=>{bld(x,66,28,'#6f819a');bld(x+32,52,22,'#5f7189');bld(x+58,72,34,'#74869e');bld(x+96,60,14,'#5f7189');});   // mid-rise blocks
+  lay(70,170,x=>{box(x+30,56,40,22,'#fff');ctx.fillStyle=PAL.acc;ctx.fillRect(x+34,60,32,6);ctx.fillStyle=PAL.ink;ctx.fillRect(x+34,70,22,2);box(x+48,78,3,20,'#555');});   // rooftop billboards
+  ctx.fillStyle='#5a5f66';ctx.fillRect(60,98,200,14);ctx.fillStyle='#3a3d42';ctx.fillRect(60,98,200,3);   // viaduct wall
+  lay(120,60,x=>{ctx.fillStyle=PAL.ink;ctx.fillRect(x,44,2,56);ctx.fillRect(x-6,50,14,1);});ctx.fillStyle=PAL.ink;ctx.fillRect(60,50,200,1);   // overhead wire poles
+  ctx.restore();
+  box(106,20,5,92,'#c9c3b0');box(208,20,5,92,'#c9c3b0');   // window frame bars
+  ctx.strokeStyle=PAL.ink;ctx.lineWidth=1;
+  [30,85,135,190,238,290].forEach((x,i)=>{const sw=Math.sin(t*3+i)*1.5+sh;ctx.beginPath();ctx.moveTo(x,18);ctx.lineTo(x+sw,32);ctx.stroke();ctx.beginPath();ctx.arc(x+sw,35,3,0,7);ctx.stroke();});   // swaying hand straps
+  box(40,120,240,24,'#3f6b8a');ctx.fillStyle='#2a4a60';for(let x=80;x<280;x+=40)ctx.fillRect(x,120,1,24);   // seat with dividers
+  seated(110,124,sh,'#7d6a9c','#3a2a1a','read');
+  seated(212,124,sh,'#5a8f7b','#c9a24a','sleep');
+  seated(160,124,sh,'#4a6fa5',PAL.ink,'player');   // the player faces the viewer
+  box(264,26,3,102,'#8a8a8a');person(276,136+sh,'#b5833a','#2a2a2a');
+
+  ctx.globalAlpha=Math.max(0,1-t*2.5);ctx.fillStyle=PAL.paper;ctx.fillRect(0,0,320,180);ctx.globalAlpha=1;
+}
+function drawPrompt(it){
+  const r=it.rect,x=r.x+r.w/2,y=r.y-6+Math.sin(state.t*5)*1.5;
+  ctx.fillStyle=PAL.acc;ctx.beginPath();ctx.moveTo(x-4,y-5);ctx.lineTo(x+4,y-5);ctx.lineTo(x,y+1);ctx.fill();
+}
+
+/* ---------- 6. AUDIO (all synthesized: no copyrighted material, no external files) ----------
+   Music = procedural lo-fi loop (schedStep) or a user-supplied MP3 (setMusic 'custom').
+   sfx(name) plays effects. UPGRADE: swap synth voices for decoded samples, keep the sfx() names. */
+const A={ctx:null,muted:false,mode:'lofi',src:null,step:0,next:0,timer:null,rumble:null};
+let stepT=0;
+function initAudio(){
+  if(A.ctx)return;const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+  A.ctx=new AC();A.ctx.resume();
+  A.master=A.ctx.createGain();A.master.gain.value=A.muted?0:.8;A.master.connect(A.ctx.destination);
+  A.music=A.ctx.createGain();A.music.gain.value=.5;
+  const lp=A.ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2600;     // warm, muffled lo-fi tone
+  A.music.connect(lp);lp.connect(A.master);
+  A.raw=A.ctx.createGain();A.raw.gain.value=.7;A.raw.connect(A.master);              // custom MP3 bypasses the filter
+  A.sfxG=A.ctx.createGain();A.sfxG.gain.value=.6;A.sfxG.connect(A.master);
+  setMusic('lofi');
+}
+function toggleSound(){A.muted=!A.muted;if(A.master)A.master.gain.value=A.muted?0:.8;$('snd').textContent='Sound: '+(A.muted?'off':'on');}
+function tone(t,f,d,type,vol,dest,slide){
+  const o=A.ctx.createOscillator(),g=A.ctx.createGain();o.type=type;o.frequency.setValueAtTime(f,t);
+  if(slide)o.frequency.exponentialRampToValueAtTime(slide,t+d);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  o.connect(g);g.connect(dest);o.start(t);o.stop(t+d+.05);
+}
+function noise(t,d,vol,ftype,freq,dest){
+  const n=Math.floor(A.ctx.sampleRate*d),b=A.ctx.createBuffer(1,n,A.ctx.sampleRate),c=b.getChannelData(0);
+  for(let i=0;i<n;i++)c[i]=Math.random()*2-1;
+  const s=A.ctx.createBufferSource(),f=A.ctx.createBiquadFilter(),g=A.ctx.createGain();
+  s.buffer=b;f.type=ftype;f.frequency.value=freq;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+  s.connect(f);f.connect(g);g.connect(dest);s.start(t);
+}
+// 4-bar loop at 72 BPM: Cmaj7 - Am7 - Dm7 - G7 (chord notes in Hz, bass root)
+const PROG=[[[262,330,392,494],65.4],[[220,262,330,392],55],[[294,349,440,523],73.4],[[196,247,294,349],49]];
+function schedStep(t,s){
+  const k=s%16,[ch,root]=PROG[Math.floor(s/16)%4],m=A.music;
+  if(k===0||k===6||k===10)ch.forEach((f,i)=>tone(t+i*.012,f,1.1,'triangle',.07,m));   // electric-piano chords
+  if(k===0||k===7||k===10)tone(t,root,.5,'sine',.22,m);                              // bass
+  if(k===0||k===10)tone(t,120,.16,'sine',.5,m,40);                                    // kick
+  if(k===4||k===12)noise(t,.14,.25,'bandpass',1800,m);                                // snare
+  if(k%2===0)noise(t,.04,.08,'highpass',7000,m);                                      // hi-hat
+  if(k%2===0&&Math.random()<.28)tone(t,[523,587,659,784,880][Math.floor(Math.random()*5)],.5,'sine',.05,m); // random pentatonic lead
+  if(Math.random()<.15)noise(t,.02,.06,'highpass',3000,m);                            // vinyl crackle
+}
+function pump(){
+  if(A.next<A.ctx.currentTime)A.next=A.ctx.currentTime+.05;
+  while(A.next<A.ctx.currentTime+.3){schedStep(A.next+(A.step%2?.035:0),A.step);A.next+=60/72/4;A.step++;}
+}
+function setMusic(mode,buf){
+  if(!A.ctx)return;
+  clearInterval(A.timer);if(A.src){try{A.src.stop();}catch(e){}A.src=null;}
+  if(mode==='custom'&&buf){A.mode='custom';A.src=A.ctx.createBufferSource();A.src.buffer=buf;A.src.loop=true;A.src.connect(A.raw);A.src.start();}
+  else{A.mode='lofi';A.step=0;A.next=A.ctx.currentTime+.1;A.timer=setInterval(pump,100);}
+}
+function sfx(n){
+  if(!A.ctx||A.muted)return;const t=A.ctx.currentTime,o=A.sfxG;
+  if(n==='step')noise(t,.05,.1,'lowpass',700,o);
+  else if(n==='click')tone(t,660,.06,'square',.08,o);
+  else if(n==='blip')tone(t,520,.09,'square',.1,o,780);
+  else if(n==='talk')tone(t,300+Math.random()*120,.04,'square',.04,o);
+  else if(n==='print'){for(let i=0;i<6;i++)noise(t+i*.12,.06,.18,'bandpass',2500,o);}
+  else if(n==='ticket'){tone(t,880,.15,'sine',.15,o);tone(t+.12,1320,.3,'sine',.15,o);}
+  else if(n==='gate'){tone(t,880,.12,'sine',.18,o);tone(t+.15,660,.2,'sine',.18,o);noise(t,.5,.1,'lowpass',500,o);}
+  else if(n==='chime')[659,523,587,392].forEach((f,i)=>tone(t+i*.35,f,.6,'sine',.15,o));   // original station jingle
+}
+function trainRumble(on){
+  if(!A.ctx)return;
+  if(on&&!A.rumble){const n=A.ctx.sampleRate*2,b=A.ctx.createBuffer(1,n,A.ctx.sampleRate),c=b.getChannelData(0);
+    for(let i=0;i<n;i++)c[i]=Math.random()*2-1;
+    const s=A.ctx.createBufferSource(),f=A.ctx.createBiquadFilter(),g=A.ctx.createGain();
+    s.buffer=b;s.loop=true;f.type='lowpass';f.frequency.value=180;g.gain.value=.25;s.connect(f);f.connect(g);g.connect(A.sfxG);s.start();A.rumble=s;}
+  else if(!on&&A.rumble){A.rumble.stop();A.rumble=null;}
+}
+function musicMenu(){ // the guard's music request desk
+  say("Music? The station plays lo-fi by default. If you have an MP3, I can put it on the speakers.",[
+    {label:'Play my MP3',fn:()=>{if(!A.ctx)initAudio();$('mp3').click();}},   // file picker must open inside the click
+    {label:'Back to lo-fi',fn:()=>{setMusic('lofi');say('Lo-fi it is.');}},
+    {label:'Never mind'}]);
+}
+$('mp3').addEventListener('change',async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f||!A.ctx)return;
+  try{const buf=await A.ctx.decodeAudioData(await f.arrayBuffer());setMusic('custom',buf);say('Now playing: '+f.name);}
+  catch(err){say("That file won't play. Try another MP3.");}
+});
+$('snd').onclick=toggleSound;
+addEventListener('keydown',e=>{if(e.key==='m'||e.key==='M')toggleSound();});
+document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('button')&&e.target.id!=='snd')sfx('click');});
+document.addEventListener('visibilitychange',()=>{if(A.ctx)document.hidden?A.ctx.suspend():A.ctx.resume();});
+
+/* ---------- 5. UI / FLOW ---------- */
+let typer=null;
+function setMode(m){state.mode=(m==='play'&&state.scene)?'scene':m;}
+function say(text,choices){
+  setMode('ui');const d=$('dlg'),tx=$('dtxt'),bt=$('dbtn');
+  d.style.display='block';tx.textContent='';bt.innerHTML='';clearInterval(typer);
+  let i=0;typer=setInterval(()=>{tx.textContent=text.slice(0,++i);if(i%3===0)sfx('talk');if(i>=text.length){clearInterval(typer);showBtns();}},22);
+  function showBtns(){
+    (choices||[{label:'OK'}]).forEach(c=>{const b=document.createElement('button');b.textContent=c.label;
+      b.onclick=()=>{closeDlg();c.fn&&c.fn();};bt.appendChild(b);});
+    bt.firstChild.focus();
+  }
+  d.onclick=e=>{if(e.target===d||e.target===tx){clearInterval(typer);tx.textContent=text;if(!bt.children.length)showBtns();}};
+}
+function closeDlg(){clearInterval(typer);$('dlg').style.display='none';setMode('play');}
+function openPanel(title,node){
+  setMode('ui');$('ptitle').textContent=title;const b=$('pbody');b.innerHTML='';b.appendChild(node);
+  $('panel').style.display='flex';$('pclose').focus();
+}
+function closePanel(){$('panel').style.display='none';setMode('play');}
+$('pclose').onclick=closePanel;
+
+function openBoard(){
+  const wrap=document.createElement('div'),tabs=document.createElement('div'),body=document.createElement('div');
+  tabs.className='tabs';tabs.setAttribute('role','tablist');
+  function show(i){
+    [...tabs.children].forEach((t,j)=>t.setAttribute('aria-selected',i===j));
+    const s=CONFIG.board[i];body.innerHTML=s.body;
+    if(s.resume){const a=document.createElement('a');a.className='btn';a.href=CONFIG.resumeUrl;a.target='_blank';a.rel='noopener';a.textContent='Download PDF';body.appendChild(a);}
+  }
+  CONFIG.board.forEach((s,i)=>{const t=document.createElement('button');t.textContent=s.title;t.setAttribute('role','tab');t.onclick=()=>show(i);tabs.appendChild(t);});
+  wrap.append(tabs,body);openPanel('Announcement board',wrap);show(0);
+}
+function openMachine(){
+  const g=document.createElement('div');g.className='tix';
+  CONFIG.tickets.forEach(t=>{const b=document.createElement('button');
+    b.innerHTML=`${t.label}<small>to ${t.dest}</small>`;
+    b.onclick=()=>{closePanel();say('Printing ticket...',[]);sfx('print');
+      setTimeout(()=>{state.ticket=t;sfx('ticket');closeDlg();say(`Ticket to ${t.label} issued. Take it to the gate.`);},900);};
+    g.appendChild(b);});
+  openPanel('Ticket machine: choose a destination',g);
+}
+function useGate(){
+  if(!state.ticket){say("You need a ticket to pass. Try the ticket machine.");return;}
+  const t=state.ticket;
+  say(`Proceed to ${t.dest}?`,[
+    {label:'Yes',fn:()=>{
+      /* link opens after the train ride, see boardTrain() */                                  // must run inside the click (pop-up blockers)
+      sfx('gate');state.gateOpen=true;state.scene='walk';setMode('play');boardTrain(t);
+      state.auto={tx:300,ty:92};                   // cosmetic walk down the corridor
+      
+    }},
+    {label:'No'}]);
+}
+function talkGuard(){
+  const o=[{label:'Ask about the music',fn:musicMenu},{label:'Okay'}];
+  if(state.ticket)say(`Ticket to ${state.ticket.label}? That's in order. Go ahead to the gate.`,o);
+  else say("Hold on. Nobody gets through without a ticket. The machine is on the left.",o);
+}
+function boardTrain(t){ // walk through gate -> train ride (~4.5s) -> choose: continue (redirect) or go back
+  setTimeout(()=>{state.auto=null;state.scene='train';state.sceneT=0;sfx('chime');trainRumble(true);
+    setTimeout(()=>say(`Next stop: ${t.dest}. Continue your journey?`,[
+      {label:'Continue',fn:()=>{go(t.url);state.ticket=null;endScene();}},   // go() runs inside the click (pop-up blockers)
+      {label:'Go back',fn:()=>endScene()}]),4500);
+  },1500);
+}
+function endScene(){trainRumble(false);state.scene=null;state.gateOpen=false;state.x=225;state.y=100;state.dir='left';setMode('play');}
+function go(url){ if(url==='#')return; if(url.startsWith('mailto:'))location.href=url; else window.open(url,'_blank','noopener'); }
+
+/* ---------- input ---------- */
+const MAP={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right'};
+addEventListener('keydown',e=>{
+  if(state.mode!=='play'){if(state.mode==='ui'&&!state.scene&&e.key==='Escape'){closePanel();closeDlg();}return;}
+  const k=MAP[e.key]||MAP[e.key.toLowerCase?.()];
+  if(k){keys[k]=true;e.preventDefault();}
+  if((e.key==='e'||e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();interact();}
+});
+addEventListener('keyup',e=>{const k=MAP[e.key]||MAP[e.key.toLowerCase?.()];if(k)keys[k]=false;});
+// touch controls
+[['up','▲',2],['left','◀',4],['right','▶',6],['down','▼',8]].forEach(([d,l,p])=>{
+  const b=document.createElement('button');b.textContent=l;b.setAttribute('aria-label',d);
+  b.style.gridArea=({up:'1/2',left:'2/1',right:'2/3',down:'3/2'})[d];
+  const on=e=>{e.preventDefault();keys[d]=true},off=()=>keys[d]=false;
+  b.addEventListener('pointerdown',on);['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,off));
+  $('dpad').appendChild(b);});
+$('act').addEventListener('click',()=>{if(state.mode==='play')interact();});
+
+function nearest(){
+  let best=null,bd=1e9;
+  for(const it of INTERACTABLES){const r=it.rect,cx=Math.max(r.x,Math.min(state.x,r.x+r.w)),cy=Math.max(r.y,Math.min(state.y-6,r.y+r.h)),
+    d=Math.hypot(state.x-cx,state.y-6-cy);if(d<it.reach&&d<bd){best=it;bd=d;}}
+  return best;
+}
+function interact(){const it=nearest();if(it){sfx('blip');it.onUse();}}
+
+/* ---------- plain (accessible) version, generated from CONFIG ---------- */
+(function(){
+  const p=$('plain');let h=`<section><h1>${CONFIG.name}</h1><button id="back">Back to the game</button></section>`;
+  CONFIG.board.forEach(s=>h+=`<section><h2>${s.title}</h2>${s.body}</section>`);
+  h+=`<section><h2>Links</h2><p>`+CONFIG.tickets.map(t=>`<a href="${t.url}" target="_blank" rel="noopener">${t.label}</a>`).join(' · ')+`</p></section>`;
+  p.innerHTML=h;
+  $('skip').onclick=()=>{p.style.display='block';};
+  $('pl2').onclick=$('skip').onclick;
+  p.addEventListener('click',e=>{if(e.target.id==='back')p.style.display='none';});
+})();
+
+/* ---------- loop ---------- */
+let last=0;
+function frame(ts){
+  const dt=Math.min(.05,(ts-last)/1000||0);last=ts;state.t+=dt;
+  state.moving=false;
+  if(state.auto){const dx=state.auto.tx-state.x,dy=state.auto.ty-state.y,d=Math.hypot(dx,dy);
+    if(d>1){state.x+=dx/d*70*dt;state.y+=dy/d*70*dt;state.moving=true;state.dir='right';}}
+  else if(state.mode==='play'){
+    let vx=(keys.right?1:0)-(keys.left?1:0),vy=(keys.down?1:0)-(keys.up?1:0);
+    if(vx||vy){const n=Math.hypot(vx,vy),sp=62*dt;vx=vx/n*sp;vy=vy/n*sp;
+      state.dir=Math.abs(vx)>Math.abs(vy)?(vx>0?'right':'left'):(vy>0?'down':'up');
+      if(bounds(state.x+vx,state.y))state.x+=vx;if(bounds(state.x,state.y+vy))state.y+=vy;state.moving=true;}
+  }
+  if(state.moving&&state.mode==='play'){stepT-=dt;if(stepT<=0){stepT=.3;sfx('step');}}
+  if(state.scene==='train'){state.sceneT+=dt;drawTrain();}
+  else{drawRoom();drawBoard();drawMachine();drawGate();drawGuard();drawQueue();drawPlayer();}
+
+  if(state.mode==='play'&&!state.auto){const it=nearest();if(it)drawPrompt(it);}
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+$('ttl').textContent=CONFIG.station+' Station';$('sub').textContent=CONFIG.name+"'s portfolio, one stop at a time.";
+$('start').onclick=()=>{initAudio();$('title').style.display='none';setMode('play');say(CONFIG.welcome);};
+$('start').focus();
+setTimeout(()=>$('hint').style.opacity=0,8000);
+</script>
+</body>
+</html>
