@@ -127,23 +127,24 @@ a.btn:hover,a.btn:focus-visible{background:var(--ink);color:var(--ui-bg);outline
 const CONFIG = {
   name: "Adrian Afiq",
   projects:[   // project cards: thumb = image URL or data URI (empty uses a striped placeholder)
-    {name:"Project One",thumb:"",desc:"One-line description.",tech:["HTML","JS"],role:"What you built.",github:"https://github.com/your-name/project-one",demo:"https://example.com"},
-    {name:"Project Two",thumb:"",desc:"One-line description.",tech:["React","Node"],role:"What you built.",github:"https://github.com/your-name/project-two",demo:""}
+    {name:"AI-Powered HR Onboarding Assistant",thumb:"",desc:"RAG assistant that answers employee questions from internal HR documents.",tech:["Langflow","RAG","Astra DB","Google AI Embeddings","Gemini"],role:"Engineered the whole pipeline: automated document ingestion and embedding, semantic retrieval from Astra DB, and Gemini answers grounded in the retrieved HR context.",github:"",demo:""},
+    
   ],
   station: "Portfolio",       // station name shown on the opening screen and wall sign
   welcome: "Welcome. Check the board, then get a ticket.",
   resumeUrl: "#",            // path/URL to your resume PDF
   board: [                   // announcement board tabs (html allowed)
-    {title:"About", body:"<p>Hi, I'm <b>Adrian Afiq</b>, a developer who builds things for the web. Computer Science student with hands-on experience building AI agents using Langflow and working with APIs and large language model (LLM) technologies.</p><p>Currently working on: AI-Powered HR Onboarding Assistant.</p>"},
-    {title:"Experience", body:"<p><b>Now boarding:</b> Software Developer, Company A, 2022 to present.</p><p>"},
-    {title:"Projects", projects:true, body:"<p><b>Project One:</b> one-line description. Stack: HTML, JS.</p><p><b>Project Two:</b> one-line description. Stack: React, Node.</p>"},
-    {title:"Skills", body:"<p><b>Frontend:</b> HTML, CSS, JavaScript<br><b>Backend:</b> Node, SQL<br><b>Tools:</b> Git, Figma</p>"},
+    {title:"About", body:"<p>Computer Science student with hands-on experience building AI agents using Langflow and working with APIs and large language model (LLM) technologies.</p><p>Comfortable programming in C++ and Python, with JavaScript currently in progress. Interested in AI application development, software engineering, and building practical technology projects.</p>"},
+    {title:"Experience", body:"<p><b>AI-Powered HR Onboarding Assistant</b> (2026)<br><small>Langflow, RAG, Astra DB, Google AI Embeddings, Gemini</small></p><ul><li>Engineered an AI-powered HR onboarding assistant using Retrieval-Augmented Generation (RAG) to answer employee questions from internal HR documentation.</li><li>Implemented automated document ingestion and embedding generation to process and index newly uploaded HR documents.</li><li>Integrated Google AI Embeddings with Astra DB for semantic search and vector-based document retrieval.</li><li>Connected retrieved context to Gemini for context-grounded response generation.</li><li>Designed automated workflows to streamline document processing and employee information retrieval.</li></ul>"},
+    {title:"Projects", projects:true, body:""},
+    {title:"Education", body:"<p><b>Bachelor of Applied Science in Informatics Engineer</b><br>Politeknik Negeri Bandung (POLBAN)<br>2026 to 2030</p>"},
+    {title:"Skills", body:"<p><b>Languages:</b> Python, C++ (JavaScript in progress)<br><b>AI:</b> RAG architecture, LLM application development, vector databases, semantic search and embeddings<br><b>Tools:</b> Langflow, API integration</p>"},
     {title:"Resume", body:"<p>The full resume is one click away.</p>", resume:true}
   ],
   tickets: [                 // ticket machine entries (every link goes through the gate)
-    {id:"linkedin", label:"LinkedIn", dest:"LinkedIn profile", url:"https://www.linkedin.com/in/your-name"},
-    {id:"github",   label:"GitHub",   dest:"GitHub profile",   url:"https://github.com/your-name"},
-    {id:"email",    label:"Email",    dest:"your email",       url:"mailto:you@example.com"},
+    {id:"linkedin", label:"LinkedIn", dest:"LinkedIn profile", url:"https://www.linkedin.com/in/adrian-afiq"},
+    {id:"github",   label:"GitHub",   dest:"GitHub profile",   url:"https://github.com/adrianafiq573-sudo"},
+    {id:"email",    label:"Email",    dest:"your email",       url:"mailto:adrianafiq573@gmail.com"},
     {id:"resume",   label:"Resume PDF", dest:"resume file",    url:"#"}
   ]
 };
