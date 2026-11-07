@@ -38,9 +38,27 @@ a.btn:hover,a.btn:focus-visible{background:var(--ink);color:var(--ui-bg);outline
 .tix button{text-align:left;padding:.5em;border-style:dashed}
 .tix small{display:block;opacity:.7}
 /* hint + controls */
-#hint{position:absolute;top:3%;left:3%;font-size:.85em;opacity:.75;transition:opacity 2s}
+#hint{position:absolute;top:13%;left:3%;font-size:.85em;opacity:.75;transition:opacity 2s}
 #skip{position:absolute;top:3%;right:3%;font-size:.8em}
 #snd{position:absolute;top:3%;right:20%;font-size:.8em}
+#vol{position:absolute;top:4%;right:31%;width:5em;accent-color:#2b2b2b}
+#menu{position:absolute;top:3%;left:3%;font-size:.8em}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+#panel,#dlg,#title .box{animation:pop .2s ease-out}
+#pbody.fade{animation:fadein .25s}
+.proj{display:grid;gap:.5em}
+.proj button{display:flex;gap:.6em;align-items:center;text-align:left;width:100%}
+.thumb{flex:none;width:3.4em;height:2.4em;border:2px solid var(--ink);background:repeating-linear-gradient(45deg,#d9d2bf 0 4px,#faf6ea 4px 8px) center/cover}
+.tag{display:inline-block;border:1px solid var(--ink);padding:0 .4em;margin:0 .3em .3em 0;font-size:.85em}
+.ticketfx{position:absolute;left:50%;bottom:32%;width:9em;padding:.4em;text-align:center;background:var(--ui-bg);border:2px dashed var(--ink);z-index:4;pointer-events:none;animation:prt 1.3s ease-out forwards}
+@keyframes prt{from{transform:translate(-50%,40px);clip-path:inset(100% 0 0 0)}40%{clip-path:inset(0)}to{transform:translate(-50%,-30px);opacity:0}}
+.ticketfx.tear{animation:tear 1.2s ease-in forwards}
+@keyframes tear{50%{transform:translate(-50%,0) rotate(-6deg)}to{transform:translate(-50%,60px) rotate(18deg);opacity:0}}
+#act{width:3.6em;height:3.6em}
+#act:active,#dpad button:active{transform:scale(.92);filter:brightness(.8)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 /* opening screen */
 #title{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(241,236,224,.6);z-index:3}
 #title .box{padding:1em 1.8em;text-align:center}
@@ -63,9 +81,10 @@ a.btn:hover,a.btn:focus-visible{background:var(--ink);color:var(--ui-bg);outline
 <div id="game">
   <canvas id="cv" width="320" height="180" aria-label="Metro station game"></canvas>
   <div class="grain"></div>
+  <button id="menu" aria-haspopup="dialog">Menu: jump to a section</button><div id="live" class="sr" aria-live="polite"></div>
   <div id="hint">Move: arrow keys / WASD &nbsp; Interact: E or Space</div>
   <button id="skip">Plain version</button>
-  <button id="snd">Sound: on</button><input type="file" id="mp3" accept="audio/*" hidden>
+  <button id="snd">Sound: on</button><input type="range" id="vol" min="0" max="100" value="80" aria-label="Volume"><input type="file" id="mp3" accept="audio/*" hidden>
   <div id="dlg" class="box" role="dialog" aria-live="polite"><div id="dtxt"></div><div class="row" id="dbtn"></div></div>
   <div id="panel" class="box" role="dialog"><header><h2 id="ptitle"></h2><button id="pclose">Close (Esc)</button></header><div id="pbody"></div></div>
   <div id="touch"><div id="dpad"></div><button id="act" aria-label="Interact">E</button></div>
@@ -91,6 +110,8 @@ a.btn:hover,a.btn:focus-visible{background:var(--ink);color:var(--ui-bg);outline
    ---------------------------------------------------------------------
    NPCs: add an INTERACTABLES entry + SOLIDS entry + a draw fn (see GUARD).
    Cutscenes: state.scene ('walk'|'train') blocks input; finish with endScene().
+   Added in v2: CONFIG.projects (project cards), openMenu() (persistent navigation),
+   TR/trainTick() (train arriving at the corridor platform), ticketFx() (print/tear animation).
    Audio: section 6. Everything is synthesized (lo-fi loop + sound effects), so nothing needs
    licensing. Visitors can load their own MP3 by asking the guard (musicMenu). sfx(name) is the hook.
    Opening screen: the #title overlay. state.mode starts as 'title'; Start sets 'play'.
@@ -105,13 +126,17 @@ a.btn:hover,a.btn:focus-visible{background:var(--ink);color:var(--ui-bg);outline
 /* ---------- 1. CONFIG (edit me) ---------- */
 const CONFIG = {
   name: "Your Name",
+  projects:[   // project cards: thumb = image URL or data URI (empty uses a striped placeholder)
+    {name:"Project One",thumb:"",desc:"One-line description.",tech:["HTML","JS"],role:"What you built.",github:"https://github.com/your-name/project-one",demo:"https://example.com"},
+    {name:"Project Two",thumb:"",desc:"One-line description.",tech:["React","Node"],role:"What you built.",github:"https://github.com/your-name/project-two",demo:""}
+  ],
   station: "Portfolio",       // station name shown on the opening screen and wall sign
   welcome: "Welcome. Check the board, then get a ticket.",
   resumeUrl: "#",            // path/URL to your resume PDF
   board: [                   // announcement board tabs (html allowed)
     {title:"About", body:"<p>Hi, I'm <b>Your Name</b>, a developer who builds things for the web. Replace this with a short bio.</p><p>Currently working on: your current project.</p>"},
     {title:"Experience", body:"<p><b>Now boarding:</b> Software Developer, Company A, 2022 to present.</p><p><b>Previously:</b> Junior Developer, Company B, 2020 to 2022.</p>"},
-    {title:"Projects", body:"<p><b>Project One:</b> one-line description. Stack: HTML, JS.</p><p><b>Project Two:</b> one-line description. Stack: React, Node.</p>"},
+    {title:"Projects", projects:true, body:"<p><b>Project One:</b> one-line description. Stack: HTML, JS.</p><p><b>Project Two:</b> one-line description. Stack: React, Node.</p>"},
     {title:"Skills", body:"<p><b>Frontend:</b> HTML, CSS, JavaScript<br><b>Backend:</b> Node, SQL<br><b>Tools:</b> Git, Figma</p>"},
     {title:"Resume", body:"<p>The full resume is one click away.</p>", resume:true}
   ],
@@ -128,6 +153,8 @@ const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 const $=id=>document.getElementById(id);
 const state={x:160,y:84,dir:'down',ticket:null,mode:'title',auto:null,gateOpen:false,t:0};
 const keys={};
+const BOIL=false;   // true re-enables the jittery pencil outlines (softer edges, more motion)
+const COARSE=matchMedia('(pointer:coarse)').matches,RM=matchMedia('(prefers-reduced-motion:reduce)').matches;
 const PAL={ink:'#2b2b2b',wall:'#d9d2bf',floor:'#e9e3d3',tile:'#ddd6c3',dark:'#7d7a74',acc:'#c0392b',paper:'#faf6ea',skin:'#f0c9a0'};
 
 /* ---------- 2. WORLD ---------- */
@@ -185,7 +212,7 @@ function bounds(nx,ny){ // hall floor only; corridor is scenery behind the gate
 
 /* ---------- 4. STYLE helpers ---------- */
 function wob(seed){ // stepped jitter ~6fps -> "boiling line" feel
-  const f=Math.floor(state.t*6);return Math.sin(seed*12.9898+f*78.233)*.45;
+  if(!BOIL)return 0;const f=Math.floor(state.t*6);return Math.sin(seed*12.9898+f*78.233)*.45;
 }
 function box(x,y,w,h,fill){ // filled rect with wobbly pencil outline
   ctx.fillStyle=fill;ctx.fillRect(x,y,w,h);ctx.strokeStyle=PAL.ink;ctx.lineWidth=1;
@@ -208,7 +235,7 @@ function drawWall(){ // Tokyo-style wall: pale glazed tiles, line-colour stripe,
   ctx.fillStyle='#fff';ctx.font='5px monospace';ctx.textAlign='center';ctx.fillText('P01',59,25);
   ctx.fillStyle=PAL.ink;ctx.fillText(CONFIG.station.toUpperCase(),79,21);ctx.font='4px monospace';ctx.fillText('STATION',79,28);
   box(228,10,20,12,'#161616');ctx.fillStyle='#ff9a2a';ctx.font='5px monospace';ctx.textAlign='left';   // LED sign
-  ctx.fillText(Math.floor(state.t/2)%2?'GATE >':'EXIT >',231,18);
+  ctx.fillText(TR.ph==='in'||TR.ph==='stop'?'PLAT 1':(Math.floor(state.t/2)%2?'GATE >':'EXIT >'),231,18);
   const d=new Date(),cx=238,cy=36,hr=(d.getHours()%12+d.getMinutes()/60)/12*6.283,mn=d.getMinutes()/60*6.283;
   ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx,cy,7,0,7);ctx.fill();ctx.strokeStyle=PAL.ink;ctx.stroke();    // live clock
   ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.sin(hr)*4,cy-Math.cos(hr)*4);ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.sin(mn)*6,cy-Math.cos(mn)*6);ctx.stroke();
@@ -224,7 +251,7 @@ function drawRoom(){
   ctx.fillStyle='#cdd8cf';ctx.fillRect(252,40,68,18);
   box(262,50,22,26,PAL.paper);box(290,56,18,22,PAL.paper);           // posters
   ctx.fillStyle=PAL.ink;ctx.fillRect(266,56,14,2);ctx.fillRect(266,61,10,2);ctx.fillRect(294,62,10,2);
-  box(270,128,36,8,'#8a8470');                                         // bench
+  drawTrainEv();box(270,128,36,8,'#8a8470');                                         // bench
   const flick=Math.sin(state.t*9)>.92?.5:1;ctx.globalAlpha=flick;box(280,42,20,3,'#fff6c8');ctx.globalAlpha=1;
 }
 function drawBoard(){
@@ -265,7 +292,7 @@ function drawGuard(){
   ctx.fillStyle=PAL.acc;ctx.fillRect(x+1,y-8,2,2);
 }
 function drawTrain(){
-  const t=state.sceneT,sh=Math.round(Math.sin(t*16)*.6);
+  const t=state.sceneT,sh=RM?0:Math.round(Math.sin(t*16)*.6);
   ctx.fillStyle='#e8e4d8';ctx.fillRect(0,0,320,180);ctx.fillStyle='#7d7a74';ctx.fillRect(0,128,320,52);
   ctx.fillStyle='#f4f1e6';ctx.fillRect(0,0,320,18);ctx.fillStyle='#fff8d8';for(let x=10;x<320;x+=60)ctx.fillRect(x,6,40,3);   // ceiling + lights
   ctx.fillStyle='#8a8f86';ctx.fillRect(0,17,320,2);                                                                      // overhead rail
@@ -280,7 +307,7 @@ function drawTrain(){
   const bld=(x,top,w,c)=>{ctx.fillStyle=c;ctx.fillRect(x,top,w,112-top);ctx.fillStyle='#ffe7a0';   // building with lit windows
     for(let yy=top+4;yy<96;yy+=7)for(let xx=x+3;xx<x+w-3;xx+=6)if((xx*7+yy*3)%5<2)ctx.fillRect(xx,yy,3,3);};
   ctx.fillStyle='#fbe3a0';ctx.beginPath();ctx.arc(215,72,12,0,7);ctx.fill();
-  const lay=(sp,w,fn)=>{for(let x=60-((t*sp)%w);x<260;x+=w)fn(x,w);};
+  const lay=(sp,w,fn)=>{for(let x=Math.round(60-((t*sp)%w));x<260;x+=w)fn(x,w);};
   lay(8,110,x=>{ctx.fillStyle='#fff';ctx.fillRect(x+20,40,40,6);ctx.fillRect(x+30,36,20,4);});
   lay(5,260,x=>{ctx.fillStyle='#d9534f';ctx.beginPath();ctx.moveTo(x+120,36);ctx.lineTo(x+112,100);ctx.lineTo(x+128,100);ctx.closePath();ctx.fill();ctx.fillStyle='#fff';ctx.fillRect(x+117,66,6,2);});   // distant tower
   lay(14,120,x=>{ctx.fillStyle='#b7c4d4';ctx.fillRect(x,64,22,48);ctx.fillRect(x+26,52,18,60);ctx.fillRect(x+48,70,24,42);ctx.fillRect(x+76,58,16,54);ctx.fillRect(x+96,74,22,38);});   // far skyline
@@ -291,7 +318,7 @@ function drawTrain(){
   ctx.restore();
   box(106,20,5,92,'#c9c3b0');box(208,20,5,92,'#c9c3b0');   // window frame bars
   ctx.strokeStyle=PAL.ink;ctx.lineWidth=1;
-  [30,85,135,190,238,290].forEach((x,i)=>{const sw=Math.sin(t*3+i)*1.5+sh;ctx.beginPath();ctx.moveTo(x,18);ctx.lineTo(x+sw,32);ctx.stroke();ctx.beginPath();ctx.arc(x+sw,35,3,0,7);ctx.stroke();});   // swaying hand straps
+  [30,85,135,190,238,290].forEach((x,i)=>{const sw=Math.round(Math.sin(t*3+i)*1.5+sh);ctx.beginPath();ctx.moveTo(x,18);ctx.lineTo(x+sw,32);ctx.stroke();ctx.beginPath();ctx.arc(x+sw,35,3,0,7);ctx.stroke();});   // swaying hand straps
   box(40,120,240,24,'#3f6b8a');ctx.fillStyle='#2a4a60';for(let x=80;x<280;x+=40)ctx.fillRect(x,120,1,24);   // seat with dividers
   seated(110,124,sh,'#7d6a9c','#3a2a1a','read');
   seated(212,124,sh,'#5a8f7b','#c9a24a','sleep');
@@ -303,25 +330,29 @@ function drawTrain(){
 function drawPrompt(it){
   const r=it.rect,x=r.x+r.w/2,y=r.y-6+Math.sin(state.t*5)*1.5;
   ctx.fillStyle=PAL.acc;ctx.beginPath();ctx.moveTo(x-4,y-5);ctx.lineTo(x+4,y-5);ctx.lineTo(x,y+1);ctx.fill();
+  
+  
 }
 
 /* ---------- 6. AUDIO (all synthesized: no copyrighted material, no external files) ----------
    Music = procedural lo-fi loop (schedStep) or a user-supplied MP3 (setMusic 'custom').
    sfx(name) plays effects. UPGRADE: swap synth voices for decoded samples, keep the sfx() names. */
-const A={ctx:null,muted:false,mode:'lofi',src:null,step:0,next:0,timer:null,rumble:null};
+const A={vol:.8,ctx:null,muted:false,mode:'lofi',src:null,step:0,next:0,timer:null,rumble:null};
 let stepT=0;
 function initAudio(){
   if(A.ctx)return;const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
   A.ctx=new AC();A.ctx.resume();
-  A.master=A.ctx.createGain();A.master.gain.value=A.muted?0:.8;A.master.connect(A.ctx.destination);
+  A.master=A.ctx.createGain();A.master.gain.value=A.muted?0:A.vol;A.master.connect(A.ctx.destination);
   A.music=A.ctx.createGain();A.music.gain.value=.5;
   const lp=A.ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2600;     // warm, muffled lo-fi tone
   A.music.connect(lp);lp.connect(A.master);
   A.raw=A.ctx.createGain();A.raw.gain.value=.7;A.raw.connect(A.master);              // custom MP3 bypasses the filter
   A.sfxG=A.ctx.createGain();A.sfxG.gain.value=.6;A.sfxG.connect(A.master);
+  const hum=A.ctx.createOscillator(),hg=A.ctx.createGain();hum.type='sawtooth';hum.frequency.value=50;hg.gain.value=.01;   // station ambience
+  hum.connect(hg);hg.connect(A.sfxG);hum.start();
   setMusic('lofi');
 }
-function toggleSound(){A.muted=!A.muted;if(A.master)A.master.gain.value=A.muted?0:.8;$('snd').textContent='Sound: '+(A.muted?'off':'on');}
+function toggleSound(){A.muted=!A.muted;if(A.master)A.master.gain.value=A.muted?0:A.vol;$('snd').textContent='Sound: '+(A.muted?'off':'on');}
 function tone(t,f,d,type,vol,dest,slide){
   const o=A.ctx.createOscillator(),g=A.ctx.createGain();o.type=type;o.frequency.setValueAtTime(f,t);
   if(slide)o.frequency.exponentialRampToValueAtTime(slide,t+d);
@@ -365,6 +396,7 @@ function sfx(n){
   else if(n==='talk')tone(t,300+Math.random()*120,.04,'square',.04,o);
   else if(n==='print'){for(let i=0;i<6;i++)noise(t+i*.12,.06,.18,'bandpass',2500,o);}
   else if(n==='ticket'){tone(t,880,.15,'sine',.15,o);tone(t+.12,1320,.3,'sine',.15,o);}
+  else if(n==='door'){tone(t,1000,.12,'sine',.12,o);tone(t+.2,1000,.12,'sine',.12,o);}
   else if(n==='gate'){tone(t,880,.12,'sine',.18,o);tone(t+.15,660,.2,'sine',.18,o);noise(t,.5,.1,'lowpass',500,o);}
   else if(n==='chime')[659,523,587,392].forEach((f,i)=>tone(t+i*.35,f,.6,'sine',.15,o));   // original station jingle
 }
@@ -388,7 +420,8 @@ $('mp3').addEventListener('change',async e=>{
   catch(err){say("That file won't play. Try another MP3.");}
 });
 $('snd').onclick=toggleSound;
-addEventListener('keydown',e=>{if(e.key==='m'||e.key==='M')toggleSound();});
+$('vol').oninput=e=>{A.vol=e.target.value/100;if(A.master&&!A.muted)A.master.gain.value=A.vol;};
+addEventListener('keydown',e=>{if((e.key==='m'||e.key==='M')&&e.target.tagName!=='INPUT')toggleSound();});
 document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('button')&&e.target.id!=='snd')sfx('click');});
 document.addEventListener('visibilitychange',()=>{if(A.ctx)document.hidden?A.ctx.suspend():A.ctx.resume();});
 
@@ -414,22 +447,63 @@ function openPanel(title,node){
 function closePanel(){$('panel').style.display='none';setMode('play');}
 $('pclose').onclick=closePanel;
 
-function openBoard(){
+function openBoard(n=0){
   const wrap=document.createElement('div'),tabs=document.createElement('div'),body=document.createElement('div');
   tabs.className='tabs';tabs.setAttribute('role','tablist');
   function show(i){
     [...tabs.children].forEach((t,j)=>t.setAttribute('aria-selected',i===j));
-    const s=CONFIG.board[i];body.innerHTML=s.body;
-    if(s.resume){const a=document.createElement('a');a.className='btn';a.href=CONFIG.resumeUrl;a.target='_blank';a.rel='noopener';a.textContent='Download PDF';body.appendChild(a);}
+    const s=CONFIG.board[i];if(s.projects)projList(body);else{body.innerHTML=s.body;fadeIn(body);}
+    if(s.resume){const a=document.createElement('a');a.className='btn';a.href=CONFIG.resumeUrl;a.target='_blank';a.rel='noopener';a.textContent='Download PDF';
+      a.onclick=e=>{e.preventDefault();ticketFx('RESUME',true);sfx('ticket');setTimeout(()=>go(CONFIG.resumeUrl),900);};body.appendChild(a);}
   }
   CONFIG.board.forEach((s,i)=>{const t=document.createElement('button');t.textContent=s.title;t.setAttribute('role','tab');t.onclick=()=>show(i);tabs.appendChild(t);});
-  wrap.append(tabs,body);openPanel('Announcement board',wrap);show(0);
+  wrap.append(tabs,body);openPanel('Announcement board',wrap);show(n);
+}
+function fadeIn(el){el.classList.remove('fade');void el.offsetWidth;el.classList.add('fade');}
+function ticketFx(label,tear){const d=document.createElement('div');d.className='ticketfx'+(tear?' tear':'');d.textContent=(tear?'\u2702 ':'')+label+' TICKET';$('game').appendChild(d);setTimeout(()=>d.remove(),1400);}
+function projList(body){ // departure-board style project list
+  body.innerHTML='';const g=document.createElement('div');g.className='proj';
+  CONFIG.projects.forEach((p,i)=>{const b=document.createElement('button');
+    b.innerHTML=`<span class="thumb"${p.thumb?` style="background-image:url('${p.thumb}')"`:''}></span><span><b>${p.name}</b><br><small>${p.desc}</small></span>`;
+    b.onclick=()=>projDetail(body,i);g.appendChild(b);});
+  body.appendChild(g);fadeIn(body);
+}
+function projDetail(body,i){
+  const p=CONFIG.projects[i],L=(u,t)=>u?`<a class="btn" href="${u}" target="_blank" rel="noopener">${t}</a> `:'';
+  body.innerHTML=`<button id="pback">Back to departures</button><h3>${p.name}</h3><p>${p.desc}</p><p>${p.tech.map(t=>`<span class="tag">${t}</span>`).join('')}</p><p><b>My contribution:</b> ${p.role}</p><p>${L(p.github,'GitHub')}${L(p.demo,'Live demo')}</p>`;
+  const b=body.querySelector('#pback');b.onclick=()=>projList(body);fadeIn(body);b.focus();
+}
+function openMenu(){
+  const w=document.createElement('div');w.className='tix';
+  const add=(t,f)=>{const b=document.createElement('button');b.textContent=t;b.onclick=f;w.appendChild(b);};
+  CONFIG.board.forEach((s,i)=>add(s.title,()=>{closePanel();openBoard(i);}));
+  add('Links (ticket machine)',()=>{closePanel();openMachine();});
+  add('Plain version',()=>{closePanel();$('plain').style.display='block';});
+  openPanel('Go to...',w);
+}
+$('menu').onclick=()=>{if(state.mode==='play')openMenu();};
+let lastP='';function liveMsg(it){const m=it?it.prompt:'';if(m!==lastP){lastP=m;$('live').textContent=m?m+'. Press E.':'';}}
+
+const TR={ph:'idle',t:0,next:30,x:340}; // train at the corridor platform: idle -> in -> stop -> out
+function trainTick(dt){
+  if(RM||state.scene)return;TR.t+=dt;
+  if(TR.ph==='idle'&&TR.t>TR.next){TR.ph='in';TR.t=0;sfx('chime');trainRumble(true);}
+  else if(TR.ph==='in'){TR.x=340-Math.min(1,TR.t/3)*78;if(TR.t>3){TR.ph='stop';TR.t=0;trainRumble(false);sfx('door');}}
+  else if(TR.ph==='stop'&&TR.t>4){TR.ph='out';TR.t=0;sfx('chime');trainRumble(true);}
+  else if(TR.ph==='out'){TR.x=262+TR.t/3*130;if(TR.t>3){TR.ph='idle';TR.t=0;TR.next=45+Math.random()*30;trainRumble(false);}}
+}
+function drawTrainEv(){
+  if(TR.ph==='idle')return;
+  ctx.save();ctx.beginPath();ctx.rect(252,40,68,120);ctx.clip();
+  for(let i=0;i<2;i++){const x=Math.round(TR.x)+i*62;box(x,92,60,44,'#d8dcd6');ctx.fillStyle='#3a9a5a';ctx.fillRect(x,118,60,4);
+    for(let j=0;j<3;j++)box(x+5+j*18,98,13,12,TR.ph==='stop'?'#ffe7a0':'#9fc5e8');}
+  ctx.restore();
 }
 function openMachine(){
   const g=document.createElement('div');g.className='tix';
   CONFIG.tickets.forEach(t=>{const b=document.createElement('button');
     b.innerHTML=`${t.label}<small>to ${t.dest}</small>`;
-    b.onclick=()=>{closePanel();say('Printing ticket...',[]);sfx('print');
+    b.onclick=()=>{closePanel();say('Printing ticket...',[]);sfx('print');ticketFx(t.label);
       setTimeout(()=>{state.ticket=t;sfx('ticket');closeDlg();say(`Ticket to ${t.label} issued. Take it to the gate.`);},900);};
     g.appendChild(b);});
   openPanel('Ticket machine: choose a destination',g);
@@ -464,6 +538,7 @@ function go(url){ if(url==='#')return; if(url.startsWith('mailto:'))location.hre
 /* ---------- input ---------- */
 const MAP={ArrowUp:'up',w:'up',ArrowDown:'down',s:'down',ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right'};
 addEventListener('keydown',e=>{
+  if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))return;
   if(state.mode!=='play'){if(state.mode==='ui'&&!state.scene&&e.key==='Escape'){closePanel();closeDlg();}return;}
   const k=MAP[e.key]||MAP[e.key.toLowerCase?.()];
   if(k){keys[k]=true;e.preventDefault();}
@@ -485,12 +560,13 @@ function nearest(){
     d=Math.hypot(state.x-cx,state.y-6-cy);if(d<it.reach&&d<bd){best=it;bd=d;}}
   return best;
 }
-function interact(){const it=nearest();if(it){sfx('blip');it.onUse();}}
+function interact(){const it=nearest();if(it){sfx('blip');if(navigator.vibrate)navigator.vibrate(8);it.onUse();}}
 
 /* ---------- plain (accessible) version, generated from CONFIG ---------- */
 (function(){
-  const p=$('plain');let h=`<section><h1>${CONFIG.name}</h1><button id="back">Back to the game</button></section>`;
-  CONFIG.board.forEach(s=>h+=`<section><h2>${s.title}</h2>${s.body}</section>`);
+  const p=$('plain');const projHTML=()=>CONFIG.projects.map(p=>`<h3>${p.name}</h3><p>${p.desc}</p><p>Tech: ${p.tech.join(', ')}</p><p>Contribution: ${p.role}</p><p>${p.github?`<a href="${p.github}" target="_blank" rel="noopener">GitHub</a> `:''}${p.demo?`<a href="${p.demo}" target="_blank" rel="noopener">Live demo</a>`:''}</p>`).join('');
+  let h=`<section><h1>${CONFIG.name}</h1><button id="back">Back to the game</button><nav aria-label="Sections">${CONFIG.board.map((s,i)=>`<a href="#s${i}">${s.title}</a>`).join(' \u00b7 ')}</nav></section>`;
+  CONFIG.board.forEach((s,i)=>h+=`<section id="s${i}"><h2>${s.title}</h2>${s.projects?projHTML():s.body}</section>`);
   h+=`<section><h2>Links</h2><p>`+CONFIG.tickets.map(t=>`<a href="${t.url}" target="_blank" rel="noopener">${t.label}</a>`).join(' · ')+`</p></section>`;
   p.innerHTML=h;
   $('skip').onclick=()=>{p.style.display='block';};
@@ -511,18 +587,19 @@ function frame(ts){
       state.dir=Math.abs(vx)>Math.abs(vy)?(vx>0?'right':'left'):(vy>0?'down':'up');
       if(bounds(state.x+vx,state.y))state.x+=vx;if(bounds(state.x,state.y+vy))state.y+=vy;state.moving=true;}
   }
+  trainTick(dt);
   if(state.moving&&state.mode==='play'){stepT-=dt;if(stepT<=0){stepT=.3;sfx('step');}}
   if(state.scene==='train'){state.sceneT+=dt;drawTrain();}
   else{drawRoom();drawBoard();drawMachine();drawGate();drawGuard();drawQueue();drawPlayer();}
 
-  if(state.mode==='play'&&!state.auto){const it=nearest();if(it)drawPrompt(it);}
+  if(state.mode==='play'&&!state.auto){const it=nearest();liveMsg(it);if(it)drawPrompt(it);}
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 $('ttl').textContent=CONFIG.station+' Station';$('sub').textContent=CONFIG.name+"'s portfolio, one stop at a time.";
-$('start').onclick=()=>{initAudio();$('title').style.display='none';setMode('play');say(CONFIG.welcome);};
+$('start').onclick=()=>{initAudio();setTimeout(()=>{$('hint').style.opacity=0;},8000);$('title').style.display='none';setMode('play');say(CONFIG.welcome);};
 $('start').focus();
-setTimeout(()=>$('hint').style.opacity=0,8000);
+
 </script>
 </body>
 </html>
